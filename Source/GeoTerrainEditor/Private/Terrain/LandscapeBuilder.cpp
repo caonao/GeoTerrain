@@ -132,18 +132,23 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
     Landscape->SetActorScale3D(FVector(XYScale, XYScale, ZScale));
     Landscape->SetActorLabel(TEXT("GeoTerrain_Landscape"));
 
+    // Simple import without edit layers — must be set before Import().
+    Landscape->bCanHaveLayersContent = false;
+
     // --- Import heightmap ----------------------------------------------------
-    // UE5.6 Import() takes per-layer TMaps keyed by a shared FGuid.
-    const FGuid LayerGuid = FGuid::NewGuid();
+    // UE5.6 Import() takes per-layer TMaps. The base (non-edit) layer is keyed
+    // by the DEFAULT FGuid() — using a fresh guid makes Import's internal
+    // FindChecked() fail the "Pair != nullptr" assert (Map.h:716) and crash.
+    const FGuid LandscapeGuid = FGuid::NewGuid();
 
     TMap<FGuid, TArray<uint16>> HeightDataPerLayer;
-    HeightDataPerLayer.Add(LayerGuid, MoveTemp(HeightData));
+    HeightDataPerLayer.Add(FGuid(), MoveTemp(HeightData));
 
     TMap<FGuid, TArray<FLandscapeImportLayerInfo>> MaterialLayerDataPerLayer;
-    MaterialLayerDataPerLayer.Add(LayerGuid, TArray<FLandscapeImportLayerInfo>());
+    MaterialLayerDataPerLayer.Add(FGuid(), TArray<FLandscapeImportLayerInfo>());
 
     Landscape->Import(
-        LayerGuid,
+        LandscapeGuid,
         0, 0,
         RequiredSize - 1, RequiredSize - 1,
         NumSubsections,
@@ -154,9 +159,8 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
         ELandscapeImportAlphamapType::Additive
     );
 
-    // Register landscape info so UE knows about it
-    ULandscapeInfo* Info = Landscape->CreateLandscapeInfo();
-    if (Info)
+    // Import() already sets up LandscapeInfo; fetch it (do not re-create).
+    if (ULandscapeInfo* Info = Landscape->GetLandscapeInfo())
     {
         Info->UpdateLayerInfoMap(Landscape);
     }
