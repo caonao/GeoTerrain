@@ -59,7 +59,7 @@ void FCopernicusDEMFetcher::FetchBBox(float InLatMin, float InLatMax,
     {
         for (int32 TX = TileNW.X; TX <= TileSE.X; ++TX)
         {
-            auto State  = MakeShared<FTileState>();
+            TSharedPtr<FTileState> State = MakeShared<FTileState>();
             State->TileX = TX;
             State->TileY = TY;
             State->Zoom  = Zoom;
@@ -162,9 +162,10 @@ FElevationGrid FCopernicusDEMFetcher::StitchCropResample() const
         if (!Wrapper.IsValid()) continue;
         if (!Wrapper->SetCompressed(State->PNGData.GetData(), State->PNGData.Num())) continue;
 
+        // ERGBFormat::RGB was removed in UE5.6 — request RGBA (stride 4) and use R,G,B.
         TArray<uint8> Raw;
-        if (!Wrapper->GetRaw(ERGBFormat::RGB, 8, Raw)) continue;
-        if (Raw.Num() < TilePx * TilePx * 3) continue;
+        if (!Wrapper->GetRaw(ERGBFormat::RGBA, 8, Raw)) continue;
+        if (Raw.Num() < TilePx * TilePx * 4) continue;
 
         const int32 OffX = (State->TileX - MinTX) * TilePx;
         const int32 OffY = (State->TileY - MinTY) * TilePx;
@@ -173,7 +174,7 @@ FElevationGrid FCopernicusDEMFetcher::StitchCropResample() const
         {
             for (int32 PX = 0; PX < TilePx; ++PX)
             {
-                const int32 Src = (PY * TilePx + PX) * 3;
+                const int32 Src = (PY * TilePx + PX) * 4; // RGBA
                 Stitched[(OffY + PY) * GridW + (OffX + PX)] =
                     DecodeTerrarium(Raw[Src], Raw[Src + 1], Raw[Src + 2]);
             }

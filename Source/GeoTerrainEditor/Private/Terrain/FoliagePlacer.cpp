@@ -90,11 +90,9 @@ FFoliagePlacer::FPlaceResult FFoliagePlacer::Place(const FElevationGrid& Grid,
 
     if (!IFA) { Result.Error = TEXT("Failed to get InstancedFoliageActor."); return Result; }
 
-    // Add the mesh and get the foliage info pointer
-    FFoliageInfo* FoliageInfo = nullptr;
-
-    // UE5 API: AddMesh returns UFoliageType*, sets FoliageInfo via out-param
-    UFoliageType* FoliageTypePtr = IFA->AddMesh(TreeMesh, &FoliageInfo);
+    // UE5.6 API: AddMesh returns FFoliageInfo*, sets the UFoliageType* via out-param.
+    UFoliageType* FoliageTypePtr = nullptr;
+    FFoliageInfo* FoliageInfo    = IFA->AddMesh(TreeMesh, &FoliageTypePtr);
 
     if (!FoliageTypePtr || !FoliageInfo)
     {
@@ -143,7 +141,8 @@ FFoliagePlacer::FPlaceResult FFoliagePlacer::Place(const FElevationGrid& Grid,
             FFoliageInstance Inst;
             Inst.Location     = FVector(WX, WY, WZ);
             Inst.Rotation     = FRotator(0.f, Rng.FRandRange(0.f, 360.f), 0.f);
-            Inst.DrawScale3D  = FVector(Rng.FRandRange(Rules.ScaleMin, Rules.ScaleMax));
+            // FFoliageInstance::DrawScale3D is FVector3f in UE5.6
+            Inst.DrawScale3D  = FVector3f(Rng.FRandRange(Rules.ScaleMin, Rules.ScaleMax));
             NewInstances.Add(Inst);
         }
     }
@@ -160,7 +159,7 @@ FFoliagePlacer::FPlaceResult FFoliagePlacer::Place(const FElevationGrid& Grid,
     for (const FFoliageInstance& Inst : NewInstances)
         InstancePtrs.Add(&Inst);
 
-    FoliageInfo->AddInstances(IFA, InstancePtrs);
+    FoliageInfo->AddInstances(FoliageTypePtr, InstancePtrs);
 
     World->MarkPackageDirty();
 

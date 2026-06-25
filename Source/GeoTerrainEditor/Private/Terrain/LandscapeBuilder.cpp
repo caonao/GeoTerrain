@@ -133,15 +133,24 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
     Landscape->SetActorLabel(TEXT("GeoTerrain_Landscape"));
 
     // --- Import heightmap ----------------------------------------------------
+    // UE5.6 Import() takes per-layer TMaps keyed by a shared FGuid.
+    const FGuid LayerGuid = FGuid::NewGuid();
+
+    TMap<FGuid, TArray<uint16>> HeightDataPerLayer;
+    HeightDataPerLayer.Add(LayerGuid, MoveTemp(HeightData));
+
+    TMap<FGuid, TArray<FLandscapeImportLayerInfo>> MaterialLayerDataPerLayer;
+    MaterialLayerDataPerLayer.Add(LayerGuid, TArray<FLandscapeImportLayerInfo>());
+
     Landscape->Import(
-        FGuid::NewGuid(),
+        LayerGuid,
         0, 0,
         RequiredSize - 1, RequiredSize - 1,
         NumSubsections,
         SubsectionSizeQuads,
-        HeightData.GetData(),
+        HeightDataPerLayer,
         /*HeightmapFileName=*/nullptr,
-        TArray<FLandscapeImportLayerInfo>(),
+        MaterialLayerDataPerLayer,
         ELandscapeImportAlphamapType::Additive
     );
 
