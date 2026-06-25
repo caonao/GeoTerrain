@@ -23,7 +23,10 @@ public:
         float ZScaleCM  = 100.f;
     };
 
-    static FBuildResult Build(const FElevationGrid& Grid);
+    // MaterialPath: optional object path to a landscape material/instance to
+    // assign (e.g. an Auto-Landscape material). Empty = leave default (grey).
+    static FBuildResult Build(const FElevationGrid& Grid,
+                              const FString& MaterialPath = FString());
 
 private:
     // Convert float elevations to UE5 uint16 heightmap (0=min, 65535=max)

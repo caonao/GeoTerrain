@@ -152,16 +152,32 @@ void SGeoTerrainPanel::Construct(const FArguments& InArgs)
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,12)
             [ SNew(SSeparator) ]
 
-            // ── [3] Material layers ───────────────────────────────────────
+            // ── [3] Landscape material ────────────────────────────────────
+            + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,4)
+            [
+                SNew(STextBlock)
+                .Text(LOCTEXT("LMatHdr","[3] Landscape material  (object path — Auto-Landscape recommended)"))
+                .Font(FAppStyle::GetFontStyle("SmallText"))
+            ]
+            + SVerticalBox::Slot().AutoHeight().Padding(8,0,0,14)
+            [
+                SAssignNew(LandscapeMaterialBox, SEditableTextBox)
+                .Text(LOCTEXT("LMatDefault",
+                    "/Game/Hyper/Environment_Building/AutoLandscape/BaseMaterial/Instance/Config_Examples/Edits/MI_AutoLandscape_Forest_Snow_LG_Rocks.MI_AutoLandscape_Forest_Snow_LG_Rocks"))
+            ]
+            + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,12)
+            [ SNew(SSeparator) ]
+
+            // ── [3b] Weightmap layers (only for layer-based materials) ────
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,6)
             [
                 SNew(SHorizontalBox)
                 + SHorizontalBox::Slot().AutoWidth()
-                [ SAssignNew(PaintLayersBox, SCheckBox).IsChecked(ECheckBoxState::Checked) ]
+                [ SAssignNew(PaintLayersBox, SCheckBox).IsChecked(ECheckBoxState::Unchecked) ]
                 + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(4,0)
                 [
                     SNew(STextBlock)
-                    .Text(LOCTEXT("MatHdr","[3] Auto-paint material layers  (Snow / Rock / Grass / Dirt)"))
+                    .Text(LOCTEXT("MatHdr","Auto-paint weightmap layers  (Snow/Rock/Grass/Dirt — only for layer materials)"))
                     .Font(FAppStyle::GetFontStyle("SmallText"))
                 ]
             ]
@@ -275,7 +291,10 @@ void SGeoTerrainPanel::OnElevationReady(const FElevationGrid& Grid)
         TEXT("[2/4] Building landscape (%dx%d, %.0f–%.0f m)..."),
         Grid.Width, Grid.Height, Grid.ElevMin, Grid.ElevMax));
 
-    FLandscapeBuilder::FBuildResult BR = FLandscapeBuilder::Build(Grid);
+    const FString MaterialPath = LandscapeMaterialBox.IsValid()
+        ? LandscapeMaterialBox->GetText().ToString().TrimStartAndEnd()
+        : FString();
+    FLandscapeBuilder::FBuildResult BR = FLandscapeBuilder::Build(Grid, MaterialPath);
     if (!BR.bSuccess)
     {
         SetStatus(FString::Printf(TEXT("Landscape failed: %s"), *BR.Error), true);

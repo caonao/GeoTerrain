@@ -33,6 +33,7 @@ private:
     TSharedPtr<SCheckBox> IncludeWaterBox;
 
     // ── Material options ──────────────────────────────────────────────────────
+    TSharedPtr<SEditableTextBox> LandscapeMaterialBox; // object path to assign
     TSharedPtr<SCheckBox>        PaintLayersBox;
     TSharedPtr<SEditableTextBox> SnowAltBox;
     TSharedPtr<SEditableTextBox> RockAltBox;

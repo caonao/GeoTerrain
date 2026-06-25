@@ -5,6 +5,8 @@
 #include "LandscapeImportHelper.h"
 #include "Editor.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInterface.h"
+#include "UObject/SoftObjectPath.h"
 
 // ---------------------------------------------------------------------------
 // Internal constants
@@ -65,7 +67,8 @@ TArray<uint16> FLandscapeBuilder::ToHeightmap(const TArray<float>& Elevations,
 // Build
 // ---------------------------------------------------------------------------
 
-FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& Grid)
+FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& Grid,
+                                                          const FString& MaterialPath)
 {
     FBuildResult Result;
 
@@ -131,6 +134,21 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
 
     Landscape->SetActorScale3D(FVector(XYScale, XYScale, ZScale));
     Landscape->SetActorLabel(TEXT("GeoTerrain_Landscape"));
+
+    // Assign a landscape material (e.g. an Auto-Landscape material) if provided.
+    if (!MaterialPath.IsEmpty())
+    {
+        UMaterialInterface* Mat = LoadObject<UMaterialInterface>(nullptr, *MaterialPath);
+        if (Mat)
+        {
+            Landscape->LandscapeMaterial = Mat;
+            UE_LOG(LogTemp, Display, TEXT("[GeoTerrain] Landscape material assigned: %s"), *MaterialPath);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[GeoTerrain] Could not load material: %s"), *MaterialPath);
+        }
+    }
 
     // Simple import without edit layers — must be set before Import().
     Landscape->bCanHaveLayersContent = false;
