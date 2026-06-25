@@ -72,11 +72,9 @@ void FRoadSplineBuilder::SpawnSplineActor(UWorld* World, const TArray<FVector>& 
                                            const FLinearColor& SplineColor,
                                            AActor* /*ParentFolder*/)
 {
-    FActorSpawnParameters Params;
-    Params.Name = ActorLabel;
-
+    // No fixed Params.Name — re-running would clash and crash. Label only.
     AActor* Actor = World->SpawnActor<AActor>(AActor::StaticClass(),
-                                              FTransform::Identity, Params);
+                                              FTransform::Identity, FActorSpawnParameters());
     if (!Actor) return;
 
     Actor->SetActorLabel(ActorLabel.ToString());
@@ -106,10 +104,9 @@ void FRoadSplineBuilder::SpawnSplineActor(UWorld* World, const TArray<FVector>& 
 
 AActor* FRoadSplineBuilder::SpawnParentActor(UWorld* World, const FString& Label)
 {
-    FActorSpawnParameters Params;
-    Params.Name = FName(*Label);
+    // No fixed Params.Name — re-running would clash and crash. Label only.
     AActor* Parent = World->SpawnActor<AActor>(AActor::StaticClass(),
-                                               FTransform::Identity, Params);
+                                               FTransform::Identity, FActorSpawnParameters());
     if (Parent) Parent->SetActorLabel(Label);
     return Parent;
 }

@@ -118,13 +118,12 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
     // --- Spawn landscape at the level origin (0,0,0) -------------------------
     // The heightmap midpoint maps to the actor origin, so the terrain spans
     // ±(span/2) around Z=0. Anchoring at origin keeps it on the world zero point.
-    FActorSpawnParameters Params;
-    Params.Name = FName(TEXT("GeoTerrain_Landscape"));
-
+    // NOTE: do NOT set a fixed Params.Name — re-running would clash with the
+    // previous actor and crash ("cannot generate unique name"). Use the label.
     ALandscape* Landscape = World->SpawnActor<ALandscape>(
         FVector(0.f, 0.f, 0.f),
         FRotator::ZeroRotator,
-        Params);
+        FActorSpawnParameters());
 
     if (!Landscape)
     {
