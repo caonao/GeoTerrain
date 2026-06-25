@@ -47,13 +47,29 @@ void FCopernicusDEMFetcher::FetchBBox(float InLatMin, float InLatMax,
     Tiles.Empty();
     DoneTiles  = 0;
 
-    // Zoom 10: ~305m/pixel at equator, good balance for terrain
-    constexpr int32 Zoom = 10;
+    // Adaptive zoom: pick a zoom whose source pixels roughly match the output
+    // resolution across the bbox, so small areas get real detail instead of a
+    // few zoom-10 samples upsampled to 1009 (which looks low-res / stepped).
+    const double SpanDeg = FMath::Max((double)(InLonMax - InLonMin),
+                                      (double)(InLatMax - InLatMin));
+    int32 Zoom;
+    {
+        const double TwoPowZ = (double)TargetResolution * 360.0
+                             / (FMath::Max(SpanDeg, 1e-4) * 256.0);
+        Zoom = FMath::Clamp((int32)FMath::RoundToInt(FMath::Log2(TwoPowZ)), 8, 14);
+    }
 
-    // NW tile = (LatMax, LonMin), SE tile = (LatMin, LonMax)
-    // In Mercator, higher lat → lower tile Y
-    const FIntPoint TileNW = LatLonToTileXY(InLatMax, InLonMin, Zoom);
-    const FIntPoint TileSE = LatLonToTileXY(InLatMin, InLonMax, Zoom);
+    // NW tile = (LatMax, LonMin), SE tile = (LatMin, LonMax). In Mercator,
+    // higher lat → lower tile Y. Drop a zoom level if the tile count is huge.
+    FIntPoint TileNW = LatLonToTileXY(InLatMax, InLonMin, Zoom);
+    FIntPoint TileSE = LatLonToTileXY(InLatMin, InLonMax, Zoom);
+    while (Zoom > 8 &&
+           (TileSE.X - TileNW.X + 1) * (TileSE.Y - TileNW.Y + 1) > 144)
+    {
+        --Zoom;
+        TileNW = LatLonToTileXY(InLatMax, InLonMin, Zoom);
+        TileSE = LatLonToTileXY(InLatMin, InLonMax, Zoom);
+    }
 
     for (int32 TY = TileNW.Y; TY <= TileSE.Y; ++TY)
     {
@@ -223,10 +239,11 @@ FElevationGrid FCopernicusDEMFetcher::StitchCropResample() const
             ValidMin, ValidMax, NodataCount);
     }
 
-    // Geographic extents of the full stitched grid
+    // Geographic extents of the full stitched grid (use the actual zoom used).
+    const int32 Z = (Tiles.Num() > 0) ? Tiles[0]->Zoom : 10;
     float GridLatNW, GridLonNW, GridLatSE, GridLonSE;
-    TileXYToNWCorner(MinTX,     MinTY,     10, GridLatNW, GridLonNW);
-    TileXYToNWCorner(MaxTX + 1, MaxTY + 1, 10, GridLatSE, GridLonSE);
+    TileXYToNWCorner(MinTX,     MinTY,     Z, GridLatNW, GridLonNW);
+    TileXYToNWCorner(MaxTX + 1, MaxTY + 1, Z, GridLatSE, GridLonSE);
     // GridLatNW > GridLatSE (north > south), GridLonNW < GridLonSE (west < east)
 
     // Map world coords to pixel coords within the stitched image
