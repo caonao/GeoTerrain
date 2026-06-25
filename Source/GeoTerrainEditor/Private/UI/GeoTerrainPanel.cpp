@@ -106,14 +106,14 @@ void SGeoTerrainPanel::Construct(const FArguments& InArgs)
                 MakeCoordRow(
                     LOCTEXT("LatMin","Lat Min"), LatMinBox,
                     LOCTEXT("LatMax","Lat Max"), LatMaxBox,
-                    40.0f, 41.0f)
+                    40.70f, 40.80f)
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,14)
             [
                 MakeCoordRow(
                     LOCTEXT("LonMin","Lon Min"), LonMinBox,
                     LOCTEXT("LonMax","Lon Max"), LonMaxBox,
-                    -4.0f, -3.0f)
+                    -4.05f, -3.95f)
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,12)
             [ SNew(SSeparator) ]

@@ -65,9 +65,12 @@ void FCopernicusDEMFetcher::FetchBBox(float InLatMin, float InLatMax,
             State->Zoom  = Zoom;
             Tiles.Add(State);
 
+            // AWS Terrarium tile URL order is {z}/{x}/{y}.png — NOT z/y/x.
+            // Swapping x/y fetches the mirror tile (e.g. mid-Atlantic instead
+            // of the requested land), producing bogus ocean-floor elevations.
             const FString URL = FString::Printf(
                 TEXT("https://s3.amazonaws.com/elevation-tiles-prod/terrarium/%d/%d/%d.png"),
-                Zoom, TY, TX);
+                Zoom, TX, TY);
 
             TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Req = FHttpModule::Get().CreateRequest();
             Req->SetURL(URL);
@@ -79,6 +82,11 @@ void FCopernicusDEMFetcher::FetchBBox(float InLatMin, float InLatMax,
     }
 
     TotalTiles = Tiles.Num();
+
+    UE_LOG(LogTemp, Display,
+        TEXT("[GeoTerrain] FetchBBox lat[%.4f..%.4f] lon[%.4f..%.4f] z%d  tilesX[%d..%d] tilesY[%d..%d] = %d tiles"),
+        InLatMin, InLatMax, InLonMin, InLonMax, Zoom,
+        TileNW.X, TileSE.X, TileNW.Y, TileSE.Y, TotalTiles);
 
     if (TotalTiles == 0)
     {
