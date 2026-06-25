@@ -13,6 +13,7 @@
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SComboBox.h"
 #include "Widgets/Notifications/SProgressBar.h"
 #include "Styling/AppStyle.h"
 #include "Editor.h"
@@ -71,6 +72,14 @@ TSharedRef<SWidget> SGeoTerrainPanel::MakeField(const FText& Label,
 
 void SGeoTerrainPanel::Construct(const FArguments& InArgs)
 {
+    // Valid landscape sizes (N where (N-1) is a multiple of 126).
+    MapSizeOptions.Empty();
+    MapSizeOptions.Add(MakeShared<FString>(TEXT("505 (rápido, baja)")));
+    MapSizeOptions.Add(MakeShared<FString>(TEXT("1009 (medio)")));
+    MapSizeOptions.Add(MakeShared<FString>(TEXT("2017 (alto — recomendado)")));
+    MapSizeOptions.Add(MakeShared<FString>(TEXT("4033 (máximo — pesado)")));
+    SelectedMapSize = MapSizeOptions[2]; // 2017 default
+
     ChildSlot
     [
         SNew(SScrollBox)
@@ -125,6 +134,33 @@ void SGeoTerrainPanel::Construct(const FArguments& InArgs)
                     SNew(STextBlock)
                     .Text(LOCTEXT("UseIGN","Source: IGN MDT 5 m  (Spain, max resolution — uncheck for global SRTM)"))
                     .AutoWrapText(true)
+                ]
+            ]
+            // Map size selector
+            + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,10)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,8,0)
+                [ SNew(STextBlock).Text(LOCTEXT("MapSize","Map size (resolution):")) ]
+                + SHorizontalBox::Slot().FillWidth(1.f)
+                [
+                    SNew(SComboBox<TSharedPtr<FString>>)
+                    .OptionsSource(&MapSizeOptions)
+                    .InitiallySelectedItem(SelectedMapSize)
+                    .OnGenerateWidget_Lambda([](TSharedPtr<FString> In)
+                    {
+                        return SNew(STextBlock).Text(FText::FromString(In.IsValid() ? *In : FString()));
+                    })
+                    .OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSel, ESelectInfo::Type)
+                    {
+                        if (NewSel.IsValid()) { SelectedMapSize = NewSel; }
+                    })
+                    [
+                        SNew(STextBlock).Text_Lambda([this]()
+                        {
+                            return FText::FromString(SelectedMapSize.IsValid() ? *SelectedMapSize : TEXT("2017"));
+                        })
+                    ]
                 ]
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,12)
@@ -274,29 +310,36 @@ FReply SGeoTerrainPanel::OnGenerateClicked()
     RegisterActiveTimer(0.1f, FWidgetActiveTimerDelegate::CreateSP(
         this, &SGeoTerrainPanel::TickProgress));
 
-    const bool bUseIGN = UseIGNBox.IsValid() && UseIGNBox->IsChecked();
+    const bool  bUseIGN = UseIGNBox.IsValid() && UseIGNBox->IsChecked();
+    const int32 MapSize = GetSelectedMapSize();
     const FOnElevationReady Cb =
         FOnElevationReady::CreateSP(this, &SGeoTerrainPanel::OnElevationReady);
 
     if (bUseIGN)
     {
-        // IGN MDT 5 m (Spain). Use a 2017 landscape to preserve the extra detail.
         SetStatus(FString::Printf(
-            TEXT("[1/4] Downloading IGN MDT 5 m (%.4f,%.4f)–(%.4f,%.4f)..."),
-            LatMin, LonMin, LatMax, LonMax));
+            TEXT("[1/4] Downloading IGN MDT 5 m → %d²  (%.4f,%.4f)–(%.4f,%.4f)..."),
+            MapSize, LatMin, LonMin, LatMax, LonMax));
         ActiveIGNFetcher = MakeShared<FIGNDEMFetcher>();
-        ActiveIGNFetcher->FetchBBox(LatMin, LatMax, LonMin, LonMax, Cb, 2017);
+        ActiveIGNFetcher->FetchBBox(LatMin, LatMax, LonMin, LonMax, Cb, MapSize);
     }
     else
     {
         SetStatus(FString::Printf(
-            TEXT("[1/4] Downloading global elevation tiles (%.4f,%.4f)–(%.4f,%.4f)..."),
-            LatMin, LonMin, LatMax, LonMax));
+            TEXT("[1/4] Downloading global elevation → %d²  (%.4f,%.4f)–(%.4f,%.4f)..."),
+            MapSize, LatMin, LonMin, LatMax, LonMax));
         ActiveDEMFetcher = MakeShared<FCopernicusDEMFetcher>();
-        ActiveDEMFetcher->FetchBBox(LatMin, LatMax, LonMin, LonMax, Cb, 1009);
+        ActiveDEMFetcher->FetchBBox(LatMin, LatMax, LonMin, LonMax, Cb, MapSize);
     }
 
     return FReply::Handled();
+}
+
+int32 SGeoTerrainPanel::GetSelectedMapSize() const
+{
+    // Options start with the size number; Atoi reads the leading digits.
+    const int32 Size = SelectedMapSize.IsValid() ? FCString::Atoi(**SelectedMapSize) : 2017;
+    return (Size >= 505) ? Size : 2017;
 }
 
 // ---------------------------------------------------------------------------

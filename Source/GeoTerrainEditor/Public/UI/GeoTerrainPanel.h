@@ -31,6 +31,11 @@ private:
     // ── Elevation source ──────────────────────────────────────────────────────
     TSharedPtr<SCheckBox> UseIGNBox; // IGN MDT 5m (Spain) vs global Terrarium
 
+    // ── Map (landscape) size ────────────────────────────────────────────────
+    TArray<TSharedPtr<FString>> MapSizeOptions;
+    TSharedPtr<FString>         SelectedMapSize;
+    int32 GetSelectedMapSize() const;
+
     // ── OSM options ───────────────────────────────────────────────────────────
     TSharedPtr<SCheckBox> IncludeRoadsBox;
     TSharedPtr<SCheckBox> IncludeForestsBox;
