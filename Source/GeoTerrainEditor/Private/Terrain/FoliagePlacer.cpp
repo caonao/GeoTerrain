@@ -90,9 +90,17 @@ FFoliagePlacer::FPlaceResult FFoliagePlacer::Place(const FElevationGrid& Grid,
 
     if (!IFA) { Result.Error = TEXT("Failed to get InstancedFoliageActor."); return Result; }
 
-    // UE5.6 API: AddMesh returns FFoliageInfo*, sets the UFoliageType* via out-param.
+    // UE5.6 API: AddMesh asserts the mesh is NOT already a foliage source.
+    // On a re-run the mesh is already registered, so reuse it instead of
+    // calling AddMesh again (which would trip the assertion and crash).
     UFoliageType* FoliageTypePtr = nullptr;
-    FFoliageInfo* FoliageInfo    = IFA->AddMesh(TreeMesh, &FoliageTypePtr);
+    FFoliageInfo* FoliageInfo    = nullptr;
+
+    FoliageTypePtr = IFA->GetLocalFoliageTypeForSource(TreeMesh, &FoliageInfo);
+    if (!FoliageTypePtr || !FoliageInfo)
+    {
+        FoliageInfo    = IFA->AddMesh(TreeMesh, &FoliageTypePtr);
+    }
 
     if (!FoliageTypePtr || !FoliageInfo)
     {
