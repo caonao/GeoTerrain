@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Widgets/SCompoundWidget.h"
 #include "DEM/CopernicusDEMFetcher.h"
+#include "DEM/IGNDEMFetcher.h"
 #include "OSM/OSMDataFetcher.h"
 #include "Terrain/MaterialApplicator.h"
 #include "Terrain/FoliagePlacer.h"
@@ -26,6 +27,9 @@ private:
     TSharedPtr<SEditableTextBox> LatMaxBox;
     TSharedPtr<SEditableTextBox> LonMinBox;
     TSharedPtr<SEditableTextBox> LonMaxBox;
+
+    // ── Elevation source ──────────────────────────────────────────────────────
+    TSharedPtr<SCheckBox> UseIGNBox; // IGN MDT 5m (Spain) vs global Terrarium
 
     // ── OSM options ───────────────────────────────────────────────────────────
     TSharedPtr<SCheckBox> IncludeRoadsBox;
@@ -52,6 +56,7 @@ private:
     // ── Pipeline state ────────────────────────────────────────────────────────
     bool bGenerating = false;
     TSharedPtr<FCopernicusDEMFetcher> ActiveDEMFetcher;
+    TSharedPtr<FIGNDEMFetcher>        ActiveIGNFetcher;
     TSharedPtr<FOSMDataFetcher>       ActiveOSMFetcher;
 
     FElevationGrid CachedGrid;

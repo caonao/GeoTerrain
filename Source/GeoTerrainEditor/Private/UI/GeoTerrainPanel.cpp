@@ -115,6 +115,18 @@ void SGeoTerrainPanel::Construct(const FArguments& InArgs)
                     LOCTEXT("LonMax","Lon Max"), LonMaxBox,
                     -4.05f, -3.95f)
             ]
+            + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,10)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot().AutoWidth()
+                [ SAssignNew(UseIGNBox, SCheckBox).IsChecked(ECheckBoxState::Checked) ]
+                + SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center).Padding(4,0)
+                [
+                    SNew(STextBlock)
+                    .Text(LOCTEXT("UseIGN","Source: IGN MDT 5 m  (Spain, max resolution — uncheck for global SRTM)"))
+                    .AutoWrapText(true)
+                ]
+            ]
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,12)
             [ SNew(SSeparator) ]
 
@@ -258,16 +270,31 @@ FReply SGeoTerrainPanel::OnGenerateClicked()
 
     ProgressBar->SetVisibility(EVisibility::Visible);
     ProgressBar->SetPercent(0.f);
-    SetStatus(FString::Printf(
-        TEXT("[1/4] Downloading elevation tiles (%.4f,%.4f)–(%.4f,%.4f)..."),
-        LatMin, LonMin, LatMax, LonMax));
 
     RegisterActiveTimer(0.1f, FWidgetActiveTimerDelegate::CreateSP(
         this, &SGeoTerrainPanel::TickProgress));
 
-    ActiveDEMFetcher = MakeShared<FCopernicusDEMFetcher>();
-    ActiveDEMFetcher->FetchBBox(LatMin, LatMax, LonMin, LonMax,
-        FOnElevationReady::CreateSP(this, &SGeoTerrainPanel::OnElevationReady), 1009);
+    const bool bUseIGN = UseIGNBox.IsValid() && UseIGNBox->IsChecked();
+    const FOnElevationReady Cb =
+        FOnElevationReady::CreateSP(this, &SGeoTerrainPanel::OnElevationReady);
+
+    if (bUseIGN)
+    {
+        // IGN MDT 5 m (Spain). Use a 2017 landscape to preserve the extra detail.
+        SetStatus(FString::Printf(
+            TEXT("[1/4] Downloading IGN MDT 5 m (%.4f,%.4f)–(%.4f,%.4f)..."),
+            LatMin, LonMin, LatMax, LonMax));
+        ActiveIGNFetcher = MakeShared<FIGNDEMFetcher>();
+        ActiveIGNFetcher->FetchBBox(LatMin, LatMax, LonMin, LonMax, Cb, 2017);
+    }
+    else
+    {
+        SetStatus(FString::Printf(
+            TEXT("[1/4] Downloading global elevation tiles (%.4f,%.4f)–(%.4f,%.4f)..."),
+            LatMin, LonMin, LatMax, LonMax));
+        ActiveDEMFetcher = MakeShared<FCopernicusDEMFetcher>();
+        ActiveDEMFetcher->FetchBBox(LatMin, LatMax, LonMin, LonMax, Cb, 1009);
+    }
 
     return FReply::Handled();
 }
@@ -429,6 +456,7 @@ void SGeoTerrainPanel::FinishPipeline()
     bGenerating = false;
     ProgressBar->SetVisibility(EVisibility::Hidden);
     ActiveDEMFetcher.Reset();
+    ActiveIGNFetcher.Reset();
     ActiveOSMFetcher.Reset();
 }
 
@@ -437,6 +465,8 @@ EActiveTimerReturnType SGeoTerrainPanel::TickProgress(double /*t*/, float /*dt*/
     if (!bGenerating) return EActiveTimerReturnType::Stop;
     if (ActiveDEMFetcher.IsValid())
         ProgressBar->SetPercent(ActiveDEMFetcher->GetProgress() * 0.3f);
+    else if (ActiveIGNFetcher.IsValid())
+        ProgressBar->SetPercent(ActiveIGNFetcher->GetProgress() * 0.3f);
     return EActiveTimerReturnType::Continue;
 }
 

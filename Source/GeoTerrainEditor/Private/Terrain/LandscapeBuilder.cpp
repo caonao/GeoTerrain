@@ -79,17 +79,20 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
     }
 
     // Valid landscape dimension: (n * NumSubsections * SubsectionSizeQuads) + 1
-    // Standard: NumSubsections=2, SubsectionSizeQuads=63  → n=8 → 1009
+    // Standard: NumSubsections=2, SubsectionSizeQuads=63 → n=8 → 1009, n=16 → 2017.
     constexpr int32 NumSubsections      = 2;
     constexpr int32 SubsectionSizeQuads = 63;
-    constexpr int32 RequiredSize        = 1009; // 8 * 2 * 63 + 1
+    constexpr int32 QuadsPerComp        = NumSubsections * SubsectionSizeQuads; // 126
+    const     int32 RequiredSize        = Grid.Width; // accept any valid NxN
 
-    if (Grid.Width != RequiredSize || Grid.Height != RequiredSize)
+    if (Grid.Width != Grid.Height ||
+        Grid.Width < QuadsPerComp + 1 ||
+        ((Grid.Width - 1) % QuadsPerComp) != 0)
     {
         Result.Error = FString::Printf(
-            TEXT("Grid must be %dx%d for landscape import (got %dx%d). "
-                 "Check TargetResolution in FetchBBox()."),
-            RequiredSize, RequiredSize, Grid.Width, Grid.Height);
+            TEXT("Grid %dx%d is not a valid landscape size — need NxN with (N-1) "
+                 "a multiple of %d (e.g. 1009 or 2017)."),
+            Grid.Width, Grid.Height, QuadsPerComp);
         return Result;
     }
 
