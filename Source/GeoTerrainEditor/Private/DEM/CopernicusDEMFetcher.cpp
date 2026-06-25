@@ -182,10 +182,37 @@ FElevationGrid FCopernicusDEMFetcher::StitchCropResample() const
         ++DecodedTiles;
     }
 
+    int32 OkTiles = 0;
+    for (const auto& T : Tiles) { if (T->bOK) ++OkTiles; }
+    UE_LOG(LogTemp, Display,
+        TEXT("[GeoTerrain] Tiles requested=%d ok=%d decoded=%d"),
+        Tiles.Num(), OkTiles, DecodedTiles);
+
     if (DecodedTiles == 0)
     {
         Out.Error = TEXT("All tile downloads failed. Check your internet connection.");
         return Out;
+    }
+
+    // Neutralize Terrarium "nodata" pixels (decoded near -32768 m). Left untouched
+    // they explode the elevation range, so after 0..65535 normalization the real
+    // relief collapses into a near-flat band. Replace them with the valid minimum.
+    {
+        float ValidMin = 1e9f, ValidMax = -1e9f;
+        for (float V : Stitched)
+        {
+            if (V > -12000.f) { ValidMin = FMath::Min(ValidMin, V); ValidMax = FMath::Max(ValidMax, V); }
+        }
+        if (ValidMin > 1e8f) { ValidMin = 0.f; ValidMax = 0.f; }
+
+        int32 NodataCount = 0;
+        for (float& V : Stitched)
+        {
+            if (V <= -12000.f) { V = ValidMin; ++NodataCount; }
+        }
+        UE_LOG(LogTemp, Display,
+            TEXT("[GeoTerrain] Stitched valid range %.1f..%.1f m, nodata pixels fixed=%d"),
+            ValidMin, ValidMax, NodataCount);
     }
 
     // Geographic extents of the full stitched grid
@@ -248,5 +275,10 @@ FElevationGrid FCopernicusDEMFetcher::StitchCropResample() const
     Out.ElevMin = EMin;
     Out.ElevMax = EMax;
     Out.bValid  = true;
+
+    UE_LOG(LogTemp, Display,
+        TEXT("[GeoTerrain] Final grid %dx%d  elevation %.1f..%.1f m (span %.1f m)"),
+        Out.Width, Out.Height, Out.ElevMin, Out.ElevMax, Out.ElevMax - Out.ElevMin);
+
     return Out;
 }

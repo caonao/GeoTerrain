@@ -108,18 +108,18 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
     const float XYScale = ComputeXYScale(Grid);
     const float ZScale  = ComputeZScale(Grid.ElevMin, Grid.ElevMax);
 
-    // Actor Z position: place ElevMin at world Z = 0.
-    // HeightValue 0 → -256 landscape units from actor origin.
-    // With ZScale, -256 * ZScale cm = -RangeCM/2 → actor origin = ElevMin*100 + RangeCM/2
-    const float RangeCM   = (Grid.ElevMax - Grid.ElevMin) * 100.f;
-    const float ActorZCM  = Grid.ElevMin * 100.f + RangeCM * 0.5f;
+    UE_LOG(LogTemp, Display,
+        TEXT("[GeoTerrain] LandscapeBuilder: grid %dx%d  elev %.1f..%.1f m  XYScale=%.2f cm/u  ZScale=%.2f cm/u"),
+        Grid.Width, Grid.Height, Grid.ElevMin, Grid.ElevMax, XYScale, ZScale);
 
-    // --- Spawn landscape ------------------------------------------------------
+    // --- Spawn landscape at the level origin (0,0,0) -------------------------
+    // The heightmap midpoint maps to the actor origin, so the terrain spans
+    // ±(span/2) around Z=0. Anchoring at origin keeps it on the world zero point.
     FActorSpawnParameters Params;
     Params.Name = FName(TEXT("GeoTerrain_Landscape"));
 
     ALandscape* Landscape = World->SpawnActor<ALandscape>(
-        FVector(0.f, 0.f, ActorZCM),
+        FVector(0.f, 0.f, 0.f),
         FRotator::ZeroRotator,
         Params);
 
