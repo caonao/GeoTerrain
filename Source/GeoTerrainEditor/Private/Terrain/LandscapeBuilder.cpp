@@ -152,8 +152,8 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
         }
     }
 
-    // Simple import without edit layers — must be set before Import().
-    Landscape->bCanHaveLayersContent = false;
+    // UE5.8: bCanHaveLayersContent está deprecado. Un import sin edit layers se
+    // consigue pasando un InImportLayers vacío a Import() (12º argumento, abajo).
 
     // --- Import heightmap ----------------------------------------------------
     // UE5.6 Import() takes per-layer TMaps. The base (non-edit) layer is keyed
@@ -176,7 +176,8 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
         HeightDataPerLayer,
         /*HeightmapFileName=*/nullptr,
         MaterialLayerDataPerLayer,
-        ELandscapeImportAlphamapType::Additive
+        ELandscapeImportAlphamapType::Additive,
+        TArrayView<const FLandscapeLayer>()   // UE5.8: sin edit layers
     );
 
     // Import() already sets up LandscapeInfo; fetch it (do not re-create).

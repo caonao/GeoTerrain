@@ -2,6 +2,7 @@
 #include "Landscape.h"
 #include "LandscapeInfo.h"
 #include "LandscapeLayerInfoObject.h"
+#include "LandscapeEditTypes.h"
 #include "LandscapeEdit.h"
 #include "Math/UnrealMathUtility.h"
 
@@ -45,7 +46,9 @@ ULandscapeLayerInfoObject* FMaterialApplicator::GetOrCreateLayerInfo(
         RF_Public | RF_Standalone);
 
     LayerInfo->LayerName     = LayerName;
-    LayerInfo->bNoWeightBlend = false;
+    // UE5.7+: bNoWeightBlend reemplazado por BlendMethod (false = FinalWeightBlending);
+    // el miembro es privado, se usa el setter público.
+    LayerInfo->SetBlendMethod(ELandscapeTargetLayerBlendMethod::FinalWeightBlending, /*bInModify=*/false);
 
     return LayerInfo;
 }
