@@ -23,10 +23,11 @@ public:
 
 private:
     // ── Bounding box ──────────────────────────────────────────────────────────
-    TSharedPtr<SEditableTextBox> LatMinBox;
-    TSharedPtr<SEditableTextBox> LatMaxBox;
-    TSharedPtr<SEditableTextBox> LonMinBox;
-    TSharedPtr<SEditableTextBox> LonMaxBox;
+    // Punto central (WGS84) + lado del terreno en km. El rectángulo (bbox) se
+    // calcula por dentro en ParseCoords, así que el resto del pipeline no cambia.
+    TSharedPtr<SEditableTextBox> CenterLatBox;
+    TSharedPtr<SEditableTextBox> CenterLonBox;
+    TSharedPtr<SEditableTextBox> ExtentKmBox;
 
     // ── Elevation source ──────────────────────────────────────────────────────
     TSharedPtr<SCheckBox> UseIGNBox; // IGN MDT 5m (Spain) vs global Terrarium

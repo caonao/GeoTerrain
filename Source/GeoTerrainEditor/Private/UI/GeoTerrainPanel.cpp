@@ -97,32 +97,33 @@ void SGeoTerrainPanel::Construct(const FArguments& InArgs)
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,10)
             [
                 SNew(STextBlock)
-                .Text(LOCTEXT("Sub","Real-world terrain generator — UE 5.6"))
+                .Text(LOCTEXT("Sub","Generador de terreno real — UE 5.8"))
                 .ColorAndOpacity(FSlateColor(FLinearColor(0.55f,0.55f,0.55f)))
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,12)
             [ SNew(SSeparator) ]
 
-            // ── [1] Bounding box ──────────────────────────────────────────
+            // ── [1] Punto central + extensión ─────────────────────────────
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,6)
             [
                 SNew(STextBlock)
-                .Text(LOCTEXT("BB","[1] Bounding Box  (WGS84 decimal degrees)"))
+                .Text(LOCTEXT("BB","[1] Punto central (WGS84)  —  será el centro (0,0) del terreno"))
                 .Font(FAppStyle::GetFontStyle("SmallText"))
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,6)
             [
                 MakeCoordRow(
-                    LOCTEXT("LatMin","Lat Min"), LatMinBox,
-                    LOCTEXT("LatMax","Lat Max"), LatMaxBox,
-                    40.70f, 40.80f)
+                    LOCTEXT("CLat","Latitud"), CenterLatBox,
+                    LOCTEXT("CLon","Longitud"), CenterLonBox,
+                    40.75f, -4.00f)
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,14)
             [
-                MakeCoordRow(
-                    LOCTEXT("LonMin","Lon Min"), LonMinBox,
-                    LOCTEXT("LonMax","Lon Max"), LonMaxBox,
-                    -4.05f, -3.95f)
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,8,0)
+                [ SNew(STextBlock).Text(LOCTEXT("Ext","Lado del terreno (km):")) ]
+                + SHorizontalBox::Slot().FillWidth(1.f)
+                [ SAssignNew(ExtentKmBox, SEditableTextBox).Text(FText::FromString(TEXT("2.0"))) ]
             ]
             + SVerticalBox::Slot().AutoHeight().Padding(0,0,0,10)
             [
@@ -295,7 +296,7 @@ FReply SGeoTerrainPanel::OnGenerateClicked()
     float LatMin, LatMax, LonMin, LonMax;
     if (!ParseCoords(LatMin, LatMax, LonMin, LonMax))
     {
-        SetStatus(TEXT("Invalid coordinates: LatMin < LatMax and LonMin < LonMax required."), true);
+        SetStatus(TEXT("Coordenadas inválidas: lat [-90,90], lon [-180,180] y lado > 0 km."), true);
         return FReply::Handled();
     }
 
@@ -516,19 +517,32 @@ EActiveTimerReturnType SGeoTerrainPanel::TickProgress(double /*t*/, float /*dt*/
 bool SGeoTerrainPanel::ParseCoords(float& LatMin, float& LatMax,
                                     float& LonMin, float& LonMax) const
 {
-    if (!LatMinBox.IsValid() || !LatMaxBox.IsValid() || !LonMinBox.IsValid() || !LonMaxBox.IsValid())
+    if (!CenterLatBox.IsValid() || !CenterLonBox.IsValid() || !ExtentKmBox.IsValid())
+    {
         return false;
+    }
 
-    LatMin = FCString::Atof(*LatMinBox->GetText().ToString());
-    LatMax = FCString::Atof(*LatMaxBox->GetText().ToString());
-    LonMin = FCString::Atof(*LonMinBox->GetText().ToString());
-    LonMax = FCString::Atof(*LonMaxBox->GetText().ToString());
+    const float CenterLat = FCString::Atof(*CenterLatBox->GetText().ToString());
+    const float CenterLon = FCString::Atof(*CenterLonBox->GetText().ToString());
+    const float ExtentKm  = FCString::Atof(*ExtentKmBox->GetText().ToString());
 
-    return (LatMin < LatMax) && (LonMin < LonMax)
-        && FMath::IsWithinInclusive(LatMin, -90.f, 90.f)
-        && FMath::IsWithinInclusive(LatMax, -90.f, 90.f)
-        && FMath::IsWithinInclusive(LonMin, -180.f, 180.f)
-        && FMath::IsWithinInclusive(LonMax, -180.f, 180.f);
+    if (ExtentKm <= 0.f
+        || !FMath::IsWithinInclusive(CenterLat, -90.f, 90.f)
+        || !FMath::IsWithinInclusive(CenterLon, -180.f, 180.f))
+    {
+        return false;
+    }
+
+    // km -> grados: 1° lat ≈ 111.32 km ; 1° lon ≈ 111.32·cos(lat) km
+    const float HalfKm     = ExtentKm * 0.5f;
+    const float HalfLatDeg = HalfKm / 111.32f;
+    const float CosLat     = FMath::Max(FMath::Cos(FMath::DegreesToRadians(CenterLat)), 0.01f);
+    const float HalfLonDeg = HalfKm / (111.32f * CosLat);
+
+    LatMin = CenterLat - HalfLatDeg;  LatMax = CenterLat + HalfLatDeg;
+    LonMin = CenterLon - HalfLonDeg;  LonMax = CenterLon + HalfLonDeg;
+
+    return (LatMin < LatMax) && (LonMin < LonMax);
 }
 
 float SGeoTerrainPanel::GetBoxFloat(const TSharedPtr<SEditableTextBox>& Box, float Default) const

@@ -118,13 +118,28 @@ FLandscapeBuilder::FBuildResult FLandscapeBuilder::Build(const FElevationGrid& G
         TEXT("[GeoTerrain] LandscapeBuilder: grid %dx%d  elev %.1f..%.1f m  XYScale=%.2f cm/u  ZScale=%.2f cm/u"),
         Grid.Width, Grid.Height, Grid.ElevMin, Grid.ElevMax, XYScale, ZScale);
 
-    // --- Spawn landscape at the level origin (0,0,0) -------------------------
-    // The heightmap midpoint maps to the actor origin, so the terrain spans
-    // ±(span/2) around Z=0. Anchoring at origin keeps it on the world zero point.
-    // NOTE: do NOT set a fixed Params.Name — re-running would clash with the
-    // previous actor and crash ("cannot generate unique name"). Use the label.
+    // --- Centrar el PUNTO CENTRAL (lat/lon dado) en el (0,0,0) de Unreal -----
+    // El origen del actor Landscape es la ESQUINA (vértice 0,0) y el terreno crece
+    // hacia +X/+Y. Para que el centro geográfico caiga en el origen del mundo,
+    // desplazamos el actor media anchura en X e Y. En Z lo bajamos para que la
+    // elevación del punto central quede exactamente a Z=0 (el terreno es 1:1 real).
+    const int32 N      = Grid.Width;                    // rejilla NxN
+    const float HalfXY = (N - 1) * 0.5f * XYScale;      // media anchura en cm de mundo
+
+    float CenterZOffset = 0.f;
+    {
+        const int32 CenterIdx = (Grid.Height / 2) * N + (N / 2);
+        if (Grid.Data.IsValidIndex(CenterIdx))
+        {
+            const float Em = (Grid.ElevMin + Grid.ElevMax) * 0.5f; // elevación que cae en Z=0
+            const float Ec = Grid.Data[CenterIdx];                 // elevación del centro
+            CenterZOffset  = -(Ec - Em) * 100.f;                   // cm (1 m real = 100 cm)
+        }
+    }
+
+    // NOTE: no fijar Params.Name — re-ejecutar chocaría con el actor previo. Usar el label.
     ALandscape* Landscape = World->SpawnActor<ALandscape>(
-        FVector(0.f, 0.f, 0.f),
+        FVector(-HalfXY, -HalfXY, CenterZOffset),
         FRotator::ZeroRotator,
         FActorSpawnParameters());
 
