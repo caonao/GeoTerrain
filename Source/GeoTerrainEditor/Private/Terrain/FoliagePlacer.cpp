@@ -1,8 +1,10 @@
 #include "Terrain/FoliagePlacer.h"
-#include "InstancedFoliageActor.h"
-#include "FoliageType_InstancedStaticMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/Actor.h"
+#include "Components/SceneComponent.h"
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
 #include "Math/RandomStream.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -84,28 +86,51 @@ FFoliagePlacer::FPlaceResult FFoliagePlacer::Place(const FElevationGrid& Grid,
         }
     }
 
-    // ── Get / create IFA ─────────────────────────────────────────────────────
-    AInstancedFoliageActor* IFA =
-        AInstancedFoliageActor::GetInstancedFoliageActorForCurrentLevel(World, /*CreateIfNone=*/true);
-
-    if (!IFA) { Result.Error = TEXT("Failed to get InstancedFoliageActor."); return Result; }
-
-    // UE5.6 API: AddMesh asserts the mesh is NOT already a foliage source.
-    // On a re-run the mesh is already registered, so reuse it instead of
-    // calling AddMesh again (which would trip the assertion and crash).
-    UFoliageType* FoliageTypePtr = nullptr;
-    FFoliageInfo* FoliageInfo    = nullptr;
-
-    FoliageTypePtr = IFA->GetLocalFoliageTypeForSource(TreeMesh, &FoliageInfo);
-    if (!FoliageTypePtr || !FoliageInfo)
+    // ── Get / create HISM container actor ────────────────────────────────────
+    // UE 5.8: the editor foliage path (IFA + FFoliageInfo::AddInstances) crashes
+    // with World Partition worlds. We place instances on our own HISM instead —
+    // same runtime representation PCG uses, stable across engine versions.
+    AActor* Container = nullptr;
+    for (TActorIterator<AActor> It(World); It; ++It)
     {
-        FoliageInfo    = IFA->AddMesh(TreeMesh, &FoliageTypePtr);
+        if (It->ActorHasTag(TEXT("GeoTerrainFoliage"))) { Container = *It; break; }
+    }
+    if (!Container)
+    {
+        FActorSpawnParameters SP;
+        SP.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        Container = World->SpawnActor<AActor>(AActor::StaticClass(), FTransform::Identity, SP);
+        if (!Container) { Result.Error = TEXT("Failed to spawn foliage container actor."); return Result; }
+        Container->Tags.Add(TEXT("GeoTerrainFoliage"));
+#if WITH_EDITOR
+        Container->SetActorLabel(TEXT("GeoTerrainFoliage"));
+#endif
+        USceneComponent* RootC = NewObject<USceneComponent>(Container, TEXT("Root"));
+        Container->SetRootComponent(RootC);
+        RootC->RegisterComponent();
+        Container->AddInstanceComponent(RootC);
     }
 
-    if (!FoliageTypePtr || !FoliageInfo)
+    UHierarchicalInstancedStaticMeshComponent* HISM = nullptr;
     {
-        Result.Error = TEXT("Failed to add mesh to InstancedFoliageActor.");
-        return Result;
+        TArray<UHierarchicalInstancedStaticMeshComponent*> Comps;
+        Container->GetComponents(Comps);
+        for (UHierarchicalInstancedStaticMeshComponent* C : Comps)
+        {
+            if (C && C->GetStaticMesh() == TreeMesh) { HISM = C; break; }
+        }
+    }
+    if (!HISM)
+    {
+        HISM = NewObject<UHierarchicalInstancedStaticMeshComponent>(Container);
+        HISM->SetStaticMesh(TreeMesh);
+        HISM->SetMobility(EComponentMobility::Static);
+        if (Container->GetRootComponent())
+        {
+            HISM->AttachToComponent(Container->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+        }
+        HISM->RegisterComponent();
+        Container->AddInstanceComponent(HISM);
     }
 
     // ── Placement loop ───────────────────────────────────────────────────────
@@ -116,7 +141,7 @@ FFoliagePlacer::FPlaceResult FFoliagePlacer::Place(const FElevationGrid& Grid,
 
     FRandomStream Rng(12345); // deterministic seed
 
-    TArray<FFoliageInstance> NewInstances;
+    TArray<FTransform> NewInstances;
     NewInstances.Reserve(FMath::Min(Rules.MaxInstances, (Grid.Width / Stride) * (Grid.Height / Stride)));
 
     for (int32 Row = 0; Row < Grid.Height && NewInstances.Num() < Rules.MaxInstances; Row += Stride)
@@ -146,12 +171,11 @@ FFoliagePlacer::FPlaceResult FFoliagePlacer::Place(const FElevationGrid& Grid,
             // World Z: elevation_m * 100 (same as landscape surface)
             const float WZ = Elev * 100.f;
 
-            FFoliageInstance Inst;
-            Inst.Location     = FVector(WX, WY, WZ);
-            Inst.Rotation     = FRotator(0.f, Rng.FRandRange(0.f, 360.f), 0.f);
-            // FFoliageInstance::DrawScale3D is FVector3f in UE5.6
-            Inst.DrawScale3D  = FVector3f(Rng.FRandRange(Rules.ScaleMin, Rules.ScaleMax));
-            NewInstances.Add(Inst);
+            const float S = Rng.FRandRange(Rules.ScaleMin, Rules.ScaleMax);
+            NewInstances.Emplace(
+                FRotator(0.f, Rng.FRandRange(0.f, 360.f), 0.f),
+                FVector(WX, WY, WZ),
+                FVector(S));
         }
     }
 
@@ -161,15 +185,10 @@ FFoliagePlacer::FPlaceResult FFoliagePlacer::Place(const FElevationGrid& Grid,
         return Result;
     }
 
-    // Add all instances in one batch
-    TArray<const FFoliageInstance*> InstancePtrs;
-    InstancePtrs.Reserve(NewInstances.Num());
-    for (const FFoliageInstance& Inst : NewInstances)
-        InstancePtrs.Add(&Inst);
-
-    FoliageInfo->AddInstances(FoliageTypePtr, InstancePtrs);
-
-    World->MarkPackageDirty();
+    // Add all instances in one batch (world space)
+    HISM->AddInstances(NewInstances, /*bShouldReturnIndices=*/false, /*bWorldSpace=*/true);
+    HISM->MarkRenderStateDirty();
+    Container->MarkPackageDirty();
 
     Result.InstancesPlaced = NewInstances.Num();
     Result.bSuccess        = true;
